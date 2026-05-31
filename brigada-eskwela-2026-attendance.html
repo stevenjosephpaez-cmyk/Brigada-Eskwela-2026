@@ -1,0 +1,1613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Brigada Eskwela 2026 — Attendance</title>
+
+  <!--
+    ============================================================
+    BRIGADA ESKWELA 2026 KICK-OFF — ATTENDANCE SYSTEM
+    Schools Division of City of Carmona
+    ============================================================
+    FEATURES:
+    - QR Code generator (via QRCode.js)
+    - Attendance form with timestamp
+    - LocalStorage data persistence
+    - CSV / Excel-friendly export
+    - Admin panel with PIN protection
+    - Duplicate submission warning
+    - Mobile-first responsive design
+    ============================================================
+    CUSTOMIZATION NOTES:
+    - Change ADMIN_PIN below to your preferred 4-digit PIN
+    - Change EVENT_DATE to your actual event date
+    - Adjust GRADE_LEVELS array to match your school's grade levels
+    ============================================================
+  -->
+
+  <!-- QRCode.js for QR code generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <!-- Google Fonts: Playfair Display (display) + DM Sans (body) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@400;500;600&display=swap"
+    rel="stylesheet"
+  />
+
+  <style>
+    /* ============================================================
+       CSS CUSTOM PROPERTIES — Theme Colors & Tokens
+       Brigada Eskwela official palette: deep green, gold/yellow, white
+       ============================================================ */
+    :root {
+      /* Brand Colors */
+      --green-dark:    #1a4731;
+      --green-mid:     #2d6a4f;
+      --green-light:   #52b788;
+      --green-pale:    #d8f3dc;
+      --gold-dark:     #9a6d00;
+      --gold-mid:      #f4b800;
+      --gold-light:    #ffd60a;
+      --gold-pale:     #fff8cc;
+      --cream:         #fdfef8;
+      --white:         #ffffff;
+      --text-main:     #1c2e22;
+      --text-muted:    #4a6355;
+      --text-hint:     #7a9e8b;
+      --border:        #c8e6c9;
+      --danger:        #c0392b;
+      --danger-pale:   #fdecea;
+      --success:       #1a7f45;
+      --success-pale:  #e6f7ec;
+
+      /* Typography */
+      --font-display: 'Playfair Display', Georgia, serif;
+      --font-body:    'DM Sans', system-ui, sans-serif;
+
+      /* Spacing & Radius */
+      --radius-sm:  6px;
+      --radius-md:  12px;
+      --radius-lg:  20px;
+      --radius-xl:  32px;
+
+      /* Shadows */
+      --shadow-card: 0 2px 16px rgba(26, 71, 49, 0.10);
+      --shadow-btn:  0 2px 8px rgba(26, 71, 49, 0.18);
+    }
+
+    /* ============================================================
+       RESET & BASE
+       ============================================================ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--cream);
+      color: var(--text-main);
+      min-height: 100vh;
+      font-size: 15px;
+      line-height: 1.6;
+    }
+
+    /* ============================================================
+       LAYOUT — PAGE SECTIONS
+       ============================================================ */
+
+    /* Top decorative header band */
+    .header-band {
+      background: var(--green-dark);
+      background-image:
+        repeating-linear-gradient(
+          45deg,
+          transparent,
+          transparent 20px,
+          rgba(255,255,255,0.03) 20px,
+          rgba(255,255,255,0.03) 40px
+        );
+      padding: 28px 20px 24px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .header-band::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 6px;
+      background: linear-gradient(90deg, var(--gold-mid), var(--gold-light), var(--gold-mid));
+    }
+
+    .header-eyebrow {
+      font-family: var(--font-body);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      color: var(--gold-light);
+      margin-bottom: 8px;
+    }
+
+    .header-title {
+      font-family: var(--font-display);
+      font-size: clamp(22px, 5vw, 36px);
+      font-weight: 900;
+      color: var(--white);
+      line-height: 1.1;
+    }
+
+    .header-title span {
+      color: var(--gold-light);
+    }
+
+    .header-subtitle {
+      font-size: 13px;
+      color: rgba(255,255,255,0.70);
+      margin-top: 6px;
+      font-weight: 400;
+    }
+
+    /* Logos / badge row */
+    .header-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255,255,255,0.10);
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: var(--radius-xl);
+      padding: 5px 14px;
+      margin-top: 14px;
+      font-size: 12px;
+      color: rgba(255,255,255,0.85);
+    }
+
+    .header-badge .dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--gold-light);
+      flex-shrink: 0;
+    }
+
+    /* Main content container */
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 24px 16px 48px;
+    }
+
+    /* ============================================================
+       TABS — Form / QR / Admin
+       ============================================================ */
+    .tabs {
+      display: flex;
+      background: var(--white);
+      border-radius: var(--radius-lg);
+      padding: 4px;
+      gap: 2px;
+      box-shadow: var(--shadow-card);
+      margin-bottom: 24px;
+      border: 1px solid var(--border);
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 9px 12px;
+      border: none;
+      background: transparent;
+      border-radius: calc(var(--radius-lg) - 4px);
+      font-family: var(--font-body);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: background 0.18s, color 0.18s;
+    }
+
+    .tab-btn.active {
+      background: var(--green-dark);
+      color: var(--white);
+      box-shadow: var(--shadow-btn);
+    }
+
+    .tab-btn:not(.active):hover {
+      background: var(--green-pale);
+      color: var(--green-dark);
+    }
+
+    /* Tab panels */
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ============================================================
+       CARD — Reusable card wrapper
+       ============================================================ */
+    .card {
+      background: var(--white);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-card);
+      padding: 24px 20px;
+      margin-bottom: 16px;
+    }
+
+    .card-title {
+      font-family: var(--font-display);
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--green-dark);
+      margin-bottom: 4px;
+    }
+
+    .card-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+
+    /* ============================================================
+       FORM STYLES
+       ============================================================ */
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-main);
+      margin-bottom: 6px;
+      letter-spacing: 0.2px;
+    }
+
+    .form-label .required {
+      color: var(--danger);
+      margin-left: 3px;
+    }
+
+    .form-label .optional {
+      font-weight: 400;
+      color: var(--text-hint);
+      margin-left: 4px;
+    }
+
+    .form-control {
+      width: 100%;
+      padding: 11px 14px;
+      font-family: var(--font-body);
+      font-size: 15px;
+      color: var(--text-main);
+      background: var(--cream);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-md);
+      outline: none;
+      transition: border-color 0.18s, box-shadow 0.18s;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+
+    .form-control:focus {
+      border-color: var(--green-mid);
+      box-shadow: 0 0 0 3px rgba(45,106,79,0.12);
+      background: var(--white);
+    }
+
+    .form-control::placeholder { color: var(--text-hint); }
+
+    /* Select arrow */
+    select.form-control {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%234a6355' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 36px;
+    }
+
+    /* Role radio group */
+    .radio-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .radio-card {
+      position: relative;
+    }
+
+    .radio-card input[type="radio"] {
+      position: absolute;
+      opacity: 0;
+      width: 0; height: 0;
+    }
+
+    .radio-card label {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 11px 14px;
+      background: var(--cream);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s;
+      text-align: center;
+    }
+
+    .radio-card input:checked + label {
+      background: var(--green-pale);
+      border-color: var(--green-mid);
+      color: var(--green-dark);
+      font-weight: 600;
+    }
+
+    .radio-card label:hover {
+      border-color: var(--green-light);
+      background: var(--green-pale);
+    }
+
+    /* Submit Button */
+    .btn-submit {
+      width: 100%;
+      padding: 14px 20px;
+      background: var(--green-dark);
+      color: var(--white);
+      font-family: var(--font-body);
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      border: none;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: background 0.18s, transform 0.12s;
+      margin-top: 8px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-submit:hover { background: var(--green-mid); }
+    .btn-submit:active { transform: scale(0.98); }
+    .btn-submit:disabled {
+      background: var(--text-hint);
+      cursor: not-allowed;
+    }
+
+    /* Gold accent button */
+    .btn-gold {
+      background: var(--gold-mid);
+      color: var(--green-dark);
+    }
+    .btn-gold:hover { background: var(--gold-light); }
+
+    /* ============================================================
+       ALERT / NOTICE MESSAGES
+       ============================================================ */
+    .alert {
+      padding: 12px 16px;
+      border-radius: var(--radius-md);
+      font-size: 13.5px;
+      line-height: 1.5;
+      margin-bottom: 16px;
+    }
+
+    .alert-success {
+      background: var(--success-pale);
+      border: 1px solid #a8d5b5;
+      color: var(--success);
+    }
+
+    .alert-warning {
+      background: var(--gold-pale);
+      border: 1px solid #e8d060;
+      color: var(--gold-dark);
+    }
+
+    .alert-danger {
+      background: var(--danger-pale);
+      border: 1px solid #f1a09a;
+      color: var(--danger);
+    }
+
+    .alert-icon {
+      font-size: 16px;
+      margin-right: 6px;
+      vertical-align: -2px;
+    }
+
+    /* ============================================================
+       SUCCESS SCREEN — shown after submission
+       ============================================================ */
+    #success-screen {
+      display: none;
+      text-align: center;
+      padding: 8px 0 20px;
+    }
+
+    .success-icon {
+      width: 72px; height: 72px;
+      background: var(--success-pale);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+      font-size: 32px;
+    }
+
+    .success-name {
+      font-family: var(--font-display);
+      font-size: 22px;
+      color: var(--green-dark);
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .success-meta {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+
+    .success-timestamp {
+      display: inline-block;
+      background: var(--green-pale);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 8px 16px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--green-dark);
+      letter-spacing: 0.4px;
+      margin-bottom: 20px;
+    }
+
+    .btn-again {
+      display: inline-block;
+      padding: 10px 28px;
+      background: transparent;
+      border: 1.5px solid var(--green-mid);
+      border-radius: var(--radius-md);
+      color: var(--green-mid);
+      font-family: var(--font-body);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-again:hover {
+      background: var(--green-pale);
+      border-color: var(--green-dark);
+      color: var(--green-dark);
+    }
+
+    /* ============================================================
+       QR CODE PANEL
+       ============================================================ */
+    .qr-wrapper {
+      text-align: center;
+      padding: 8px 0;
+    }
+
+    #qr-display {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--white);
+      border: 3px solid var(--green-dark);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+      margin: 16px auto;
+      box-shadow: var(--shadow-card);
+    }
+
+    #qr-display canvas, #qr-display img {
+      display: block;
+      border-radius: var(--radius-sm);
+    }
+
+    .qr-url-display {
+      background: var(--cream);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 10px 14px;
+      font-size: 12px;
+      color: var(--text-muted);
+      word-break: break-all;
+      margin: 8px 0 16px;
+      font-family: monospace;
+    }
+
+    .qr-instructions {
+      font-size: 13px;
+      color: var(--text-muted);
+      text-align: left;
+      line-height: 1.7;
+    }
+
+    .qr-instructions li {
+      margin-bottom: 4px;
+      padding-left: 4px;
+    }
+
+    .qr-instructions li::marker {
+      color: var(--green-mid);
+    }
+
+    .btn-secondary {
+      width: 100%;
+      padding: 11px 20px;
+      background: transparent;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-md);
+      font-family: var(--font-body);
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-main);
+      cursor: pointer;
+      transition: all 0.15s;
+      margin-top: 6px;
+    }
+    .btn-secondary:hover {
+      background: var(--green-pale);
+      border-color: var(--green-mid);
+      color: var(--green-dark);
+    }
+
+    /* ============================================================
+       ADMIN PANEL
+       ============================================================ */
+    .pin-form {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .pin-input {
+      flex: 1;
+      padding: 11px 14px;
+      font-size: 20px;
+      letter-spacing: 8px;
+      font-family: monospace;
+      text-align: center;
+      background: var(--cream);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-md);
+      outline: none;
+      color: var(--text-main);
+      transition: border-color 0.18s;
+    }
+    .pin-input:focus {
+      border-color: var(--green-mid);
+      box-shadow: 0 0 0 3px rgba(45,106,79,0.12);
+    }
+
+    .btn-pin {
+      padding: 11px 18px;
+      background: var(--green-dark);
+      color: var(--white);
+      font-family: var(--font-body);
+      font-size: 14px;
+      font-weight: 600;
+      border: none;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s;
+    }
+    .btn-pin:hover { background: var(--green-mid); }
+
+    /* Stats row */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .stat-card {
+      background: var(--green-pale);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 14px 12px;
+      text-align: center;
+    }
+
+    .stat-number {
+      font-family: var(--font-display);
+      font-size: 26px;
+      font-weight: 900;
+      color: var(--green-dark);
+      line-height: 1;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-top: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    /* Data table */
+    .table-wrapper {
+      overflow-x: auto;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    thead {
+      background: var(--green-dark);
+      color: var(--white);
+    }
+
+    thead th {
+      padding: 10px 12px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 12px;
+      letter-spacing: 0.3px;
+      white-space: nowrap;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid var(--green-pale);
+      transition: background 0.12s;
+    }
+
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: var(--green-pale); }
+
+    tbody td {
+      padding: 9px 12px;
+      color: var(--text-main);
+      vertical-align: middle;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+
+    .badge-student {
+      background: var(--green-pale);
+      color: var(--green-dark);
+      border: 1px solid var(--border);
+    }
+
+    .badge-faculty {
+      background: var(--gold-pale);
+      color: var(--gold-dark);
+      border: 1px solid #e8d060;
+    }
+
+    /* Export buttons */
+    .export-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .btn-export {
+      padding: 11px 14px;
+      background: var(--green-dark);
+      color: var(--white);
+      font-family: var(--font-body);
+      font-size: 13px;
+      font-weight: 600;
+      border: none;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: background 0.15s;
+      text-align: center;
+    }
+    .btn-export:hover { background: var(--green-mid); }
+
+    .btn-export-csv {
+      background: var(--gold-mid);
+      color: var(--green-dark);
+    }
+    .btn-export-csv:hover { background: var(--gold-light); }
+
+    .btn-clear {
+      width: 100%;
+      padding: 10px;
+      background: transparent;
+      border: 1.5px solid var(--danger);
+      color: var(--danger);
+      font-family: var(--font-body);
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-clear:hover {
+      background: var(--danger-pale);
+    }
+
+    .empty-state {
+      padding: 32px 16px;
+      text-align: center;
+      color: var(--text-hint);
+      font-size: 14px;
+    }
+
+    /* ============================================================
+       FOOTER
+       ============================================================ */
+    .footer {
+      text-align: center;
+      padding: 16px 20px 32px;
+      font-size: 12px;
+      color: var(--text-hint);
+      border-top: 1px solid var(--border);
+      margin-top: 16px;
+    }
+
+    /* ============================================================
+       ANIMATIONS
+       ============================================================ */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes popIn {
+      0%   { transform: scale(0.7); opacity: 0; }
+      70%  { transform: scale(1.08); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    .anim-fade-up   { animation: fadeUp 0.35s ease both; }
+    .anim-pop       { animation: popIn 0.4s cubic-bezier(0.34,1.56,0.64,1) both; }
+
+    /* ============================================================
+       RESPONSIVE — Mobile-first tweaks
+       ============================================================ */
+    @media (max-width: 420px) {
+      .stats-grid { grid-template-columns: 1fr 1fr; }
+      .export-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- ==================== HEADER ==================== -->
+  <header class="header-band">
+    <p class="header-eyebrow">Schools Division of City of Carmona</p>
+    <h1 class="header-title">Brigada <span>Eskwela</span> 2026</h1>
+    <p class="header-subtitle">Kick-Off Program — Attendance System</p>
+    <div class="header-badge">
+      <span class="dot"></span>
+      Bayanihan para sa Paaralan
+    </div>
+  </header>
+
+  <!-- ==================== MAIN CONTENT ==================== -->
+  <main class="container">
+
+    <!-- TABS -->
+    <nav class="tabs" role="tablist" aria-label="Main navigation">
+      <button class="tab-btn active" role="tab" aria-selected="true"
+              aria-controls="panel-form" id="tab-form"
+              onclick="switchTab('form')">
+        📝 Attendance
+      </button>
+      <button class="tab-btn" role="tab" aria-selected="false"
+              aria-controls="panel-qr" id="tab-qr"
+              onclick="switchTab('qr')">
+        📷 QR Code
+      </button>
+      <button class="tab-btn" role="tab" aria-selected="false"
+              aria-controls="panel-admin" id="tab-admin"
+              onclick="switchTab('admin')">
+        🔒 Admin
+      </button>
+    </nav>
+
+    <!-- ====================================================
+         PANEL 1 — ATTENDANCE FORM
+         ==================================================== -->
+    <section id="panel-form" class="tab-panel active anim-fade-up"
+             role="tabpanel" aria-labelledby="tab-form">
+
+      <div class="card">
+        <h2 class="card-title">Sign In</h2>
+        <p class="card-desc">
+          Punan ang form para ma-record ang iyong attendance sa
+          Brigada Eskwela 2026 Kick-Off.
+        </p>
+
+        <!-- Alert container (duplicate warning, etc.) -->
+        <div id="form-alert" style="display:none;"></div>
+
+        <!-- ===== FORM ===== -->
+        <form id="attendance-form" novalidate>
+
+          <!-- Full Name -->
+          <div class="form-group">
+            <label class="form-label" for="full-name">
+              Full Name <span class="required">*</span>
+              <span class="optional">(Surname, First Name, M.I.)</span>
+            </label>
+            <input
+              type="text"
+              id="full-name"
+              class="form-control"
+              placeholder="e.g. Dela Cruz, Juan A."
+              autocomplete="name"
+              required
+            />
+          </div>
+
+          <!-- Grade Level -->
+          <div class="form-group">
+            <label class="form-label" for="grade-level">
+              Grade Level / Year Level <span class="required">*</span>
+            </label>
+            <select id="grade-level" class="form-control" required>
+              <option value="">— Select Grade Level —</option>
+              <!-- EDIT: add or remove grade levels as needed -->
+              <option value="Kinder">Kinder</option>
+              <option value="Grade 1">Grade 1</option>
+              <option value="Grade 2">Grade 2</option>
+              <option value="Grade 3">Grade 3</option>
+              <option value="Grade 4">Grade 4</option>
+              <option value="Grade 5">Grade 5</option>
+              <option value="Grade 6">Grade 6</option>
+              <option value="Grade 7">Grade 7</option>
+              <option value="Grade 8">Grade 8</option>
+              <option value="Grade 9">Grade 9</option>
+              <option value="Grade 10">Grade 10</option>
+              <option value="Grade 11">Grade 11</option>
+              <option value="Grade 12">Grade 12</option>
+              <option value="Faculty / Staff">Faculty / Staff</option>
+              <option value="N/A">N/A</option>
+            </select>
+          </div>
+
+          <!-- Role -->
+          <div class="form-group">
+            <label class="form-label">
+              Role <span class="required">*</span>
+            </label>
+            <div class="radio-group">
+              <div class="radio-card">
+                <input type="radio" id="role-student" name="role"
+                       value="Student" required />
+                <label for="role-student">🎒 Student</label>
+              </div>
+              <div class="radio-card">
+                <input type="radio" id="role-faculty" name="role"
+                       value="Faculty / Staff" />
+                <label for="role-faculty">🏫 Faculty / Staff</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Organization -->
+          <div class="form-group">
+            <label class="form-label" for="organization">
+              Organization / Section
+              <span class="optional">(optional)</span>
+            </label>
+            <input
+              type="text"
+              id="organization"
+              class="form-control"
+              placeholder="e.g. SYSTEMS, PTA, Grade 11-STEM, None"
+            />
+          </div>
+
+          <!-- Hidden timestamp — filled on submit -->
+          <input type="hidden" id="timestamp" />
+
+          <!-- Submit -->
+          <button type="submit" class="btn-submit" id="submit-btn">
+            ✅ Submit Attendance
+          </button>
+
+        </form>
+
+        <!-- Success screen (replaces form after submit) -->
+        <div id="success-screen">
+          <div class="success-icon anim-pop">✅</div>
+          <div class="success-name" id="success-name">Juan Dela Cruz</div>
+          <div class="success-meta" id="success-meta">Student — Grade 11</div>
+          <div class="success-timestamp" id="success-time">—</div>
+          <p style="font-size:13px; color:var(--text-muted); margin-bottom:20px;">
+            Nairehistro na ang iyong attendance. Salamat!
+          </p>
+          <button class="btn-again" onclick="resetForm()">
+            ← Submit Another Entry
+          </button>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ====================================================
+         PANEL 2 — QR CODE
+         ==================================================== -->
+    <section id="panel-qr" class="tab-panel anim-fade-up"
+             role="tabpanel" aria-labelledby="tab-qr">
+
+      <div class="card">
+        <h2 class="card-title">QR Code</h2>
+        <p class="card-desc">
+          I-scan ang QR code gamit ang camera ng inyong phone para
+          ma-access ang attendance form.
+        </p>
+
+        <div class="qr-wrapper">
+          <!-- QR code renders here via QRCode.js -->
+          <div id="qr-display"></div>
+
+          <!-- Current page URL label -->
+          <div class="qr-url-display" id="qr-url-text">—</div>
+
+          <!-- Download QR as image -->
+          <button class="btn-submit" onclick="downloadQR()" style="margin-bottom:8px;">
+            ⬇ Download QR Code (PNG)
+          </button>
+
+          <!-- Print QR -->
+          <button class="btn-secondary" onclick="window.print()">
+            🖨 Print QR Code
+          </button>
+        </div>
+
+        <hr style="border:none; border-top: 1px solid var(--border); margin: 20px 0;" />
+
+        <h3 style="font-size:15px; font-weight:600; margin-bottom:10px; color:var(--green-dark);">
+          📋 How to Use
+        </h3>
+        <ol class="qr-instructions">
+          <li>I-host ang HTML file sa GitHub Pages, Netlify, o kahit local network.</li>
+          <li>Buksan ang <strong>QR Code tab</strong> sa projector o print-out.</li>
+          <li>I-scan ng mga kalahok gamit ang kanilang camera/QR app.</li>
+          <li>Pupunta sila sa <strong>Attendance tab</strong> at pupunan ang form.</li>
+          <li>Pumunta sa <strong>Admin tab</strong> → i-download ang CSV para sa Excel.</li>
+        </ol>
+
+        <div class="alert alert-warning" style="margin-top:16px;">
+          ⚠️ <strong>Note:</strong> Para gumana ang QR code, dapat naka-host ang
+          file sa isang accessible na URL (hindi lang local file path).
+          Gamitin ang <em>Network URL</em> kapag naka-live server.
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ====================================================
+         PANEL 3 — ADMIN
+         ==================================================== -->
+    <section id="panel-admin" class="tab-panel anim-fade-up"
+             role="tabpanel" aria-labelledby="tab-admin">
+
+      <!-- PIN gate (visible by default) -->
+      <div id="admin-gate" class="card">
+        <h2 class="card-title">🔒 Admin Access</h2>
+        <p class="card-desc">
+          Enter the admin PIN to view and export attendance data.
+        </p>
+        <div id="pin-alert" style="display:none;"></div>
+        <div class="pin-form">
+          <input
+            type="password"
+            id="pin-input"
+            class="pin-input"
+            maxlength="6"
+            placeholder="••••"
+            inputmode="numeric"
+            onkeydown="if(event.key==='Enter')checkPin()"
+          />
+          <button class="btn-pin" onclick="checkPin()">Unlock</button>
+        </div>
+        <p style="font-size:12px; color:var(--text-hint); margin-top:8px;">
+          Default PIN: <strong>2026</strong> — change it in the source code.
+        </p>
+      </div>
+
+      <!-- Admin dashboard (hidden until unlocked) -->
+      <div id="admin-panel" style="display:none;">
+
+        <!-- Stats -->
+        <div class="card">
+          <h2 class="card-title">📊 Overview</h2>
+          <div class="stats-grid" id="stats-grid">
+            <div class="stat-card">
+              <div class="stat-number" id="stat-total">0</div>
+              <div class="stat-label">Total</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-number" id="stat-students">0</div>
+              <div class="stat-label">Students</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-number" id="stat-faculty">0</div>
+              <div class="stat-label">Faculty</div>
+            </div>
+          </div>
+
+          <!-- Export buttons -->
+          <div class="export-row">
+            <button class="btn-export btn-export-csv" onclick="exportCSV()">
+              ⬇ Download CSV
+            </button>
+            <button class="btn-export" onclick="printTable()">
+              🖨 Print List
+            </button>
+          </div>
+          <button class="btn-secondary" onclick="refreshAdmin()">
+            🔄 Refresh Data
+          </button>
+        </div>
+
+        <!-- Attendance Table -->
+        <div class="card">
+          <h2 class="card-title" style="margin-bottom:12px;">📋 Attendance Records</h2>
+          <div id="admin-table-container">
+            <!-- Table or empty state renders here -->
+          </div>
+
+          <!-- Danger zone -->
+          <hr style="border:none; border-top:1px solid var(--border); margin:16px 0;" />
+          <button class="btn-clear" onclick="clearAllData()">
+            🗑 Clear All Records (Cannot be undone)
+          </button>
+        </div>
+
+        <!-- Lock button -->
+        <button class="btn-secondary" onclick="lockAdmin()" style="margin-top:4px;">
+          🔒 Lock Admin Panel
+        </button>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    Brigada Eskwela 2026 Kick-Off — Schools Division of City of Carmona<br />
+    Data is stored locally in this browser. Export CSV regularly to preserve records.
+  </footer>
+
+  <!-- ============================================================
+       JAVASCRIPT
+       ============================================================ -->
+  <script>
+    // ============================================================
+    // CONFIG — Edit these values to customize the system
+    // ============================================================
+    const CONFIG = {
+      ADMIN_PIN:  '2026',            // Change to your preferred PIN
+      EVENT_NAME: 'Brigada Eskwela 2026 Kick-Off',
+      SCHOOL_DIV: 'Schools Division of City of Carmona',
+      STORAGE_KEY: 'brigada_attendance_2026',  // localStorage key
+    };
+
+    // ============================================================
+    // TABS — Switch between panels
+    // ============================================================
+    function switchTab(tabName) {
+      // Deactivate all
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+        btn.setAttribute('aria-selected', 'false');
+      });
+      document.querySelectorAll('.tab-panel').forEach(panel => {
+        panel.classList.remove('active');
+      });
+
+      // Activate selected
+      const btn   = document.getElementById('tab-' + tabName);
+      const panel = document.getElementById('panel-' + tabName);
+
+      if (btn)   { btn.classList.add('active'); btn.setAttribute('aria-selected', 'true'); }
+      if (panel) { panel.classList.add('active'); }
+
+      // Lazy-initialize QR code when QR tab is opened
+      if (tabName === 'qr') generateQR();
+    }
+
+    // ============================================================
+    // DATA HELPERS — Read/write attendance from localStorage
+    // ============================================================
+
+    /** Get all records from localStorage */
+    function getRecords() {
+      try {
+        return JSON.parse(localStorage.getItem(CONFIG.STORAGE_KEY)) || [];
+      } catch {
+        return [];
+      }
+    }
+
+    /** Save all records to localStorage */
+    function saveRecords(records) {
+      localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(records));
+    }
+
+    /** Add a new record (returns false if duplicate name found) */
+    function addRecord(record) {
+      const records = getRecords();
+      // Duplicate check: same full name (case-insensitive)
+      const exists = records.some(
+        r => r.fullName.trim().toLowerCase() === record.fullName.trim().toLowerCase()
+      );
+      if (exists) return { success: false, reason: 'duplicate' };
+      records.push(record);
+      saveRecords(records);
+      return { success: true };
+    }
+
+    // ============================================================
+    // FORM SUBMISSION
+    // ============================================================
+    document.getElementById('attendance-form').addEventListener('submit', function(e) {
+      e.preventDefault();
+
+      // Grab field values
+      const fullName     = document.getElementById('full-name').value.trim();
+      const gradeLevel   = document.getElementById('grade-level').value;
+      const roleEl       = document.querySelector('input[name="role"]:checked');
+      const role         = roleEl ? roleEl.value : '';
+      const organization = document.getElementById('organization').value.trim() || 'None';
+
+      // Validate required fields
+      if (!fullName || !gradeLevel || !role) {
+        showAlert('form-alert', 'danger',
+          '⚠️ Pakiusap punan ang lahat ng required fields (*) bago mag-submit.');
+        return;
+      }
+
+      // Build timestamp
+      const now       = new Date();
+      const timestamp = formatTimestamp(now);
+
+      // Build record object
+      const record = {
+        id:           Date.now(),
+        fullName,
+        gradeLevel,
+        role,
+        organization,
+        timestamp,
+        date:         now.toLocaleDateString('en-PH', { timeZone: 'Asia/Manila' }),
+        time:         now.toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit' }),
+      };
+
+      // Try to save (duplicate check inside)
+      const result = addRecord(record);
+
+      if (!result.success && result.reason === 'duplicate') {
+        // Show warning but allow override after confirmation
+        showAlert('form-alert', 'warning',
+          `⚠️ <strong>${fullName}</strong> ay mayroon nang nakalagay na attendance. ` +
+          `Sigurado ka bang gusto mong mag-submit ulit? ` +
+          `<a href="#" onclick="forceSubmit(event, ${JSON.stringify(record).replace(/"/g,"&quot;")})" ` +
+          `style="color:inherit;font-weight:700;text-decoration:underline;">I-submit pa rin</a>`
+        );
+        return;
+      }
+
+      // Clear alert and show success
+      hideAlert('form-alert');
+      showSuccessScreen(record);
+    });
+
+    /** Force-submit even if duplicate */
+    function forceSubmit(e, record) {
+      e.preventDefault();
+      // Regenerate fresh timestamp
+      const now       = new Date();
+      record.id        = Date.now();
+      record.timestamp = formatTimestamp(now);
+      record.date      = now.toLocaleDateString('en-PH', { timeZone: 'Asia/Manila' });
+      record.time      = now.toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit' });
+
+      // Push without duplicate check
+      const records = getRecords();
+      records.push(record);
+      saveRecords(records);
+
+      hideAlert('form-alert');
+      showSuccessScreen(record);
+    }
+
+    /** Format a Date object to readable PH timestamp */
+    function formatTimestamp(date) {
+      return date.toLocaleString('en-PH', {
+        timeZone: 'Asia/Manila',
+        year:   'numeric', month:  'short',  day:    'numeric',
+        hour:   '2-digit', minute: '2-digit', second: '2-digit',
+      });
+    }
+
+    /** Show success screen, hide form */
+    function showSuccessScreen(record) {
+      document.getElementById('attendance-form').style.display = 'none';
+      const screen = document.getElementById('success-screen');
+      screen.style.display = 'block';
+      document.getElementById('success-name').textContent = record.fullName;
+      document.getElementById('success-meta').textContent =
+        `${record.role} — ${record.gradeLevel}` +
+        (record.organization !== 'None' ? ` | ${record.organization}` : '');
+      document.getElementById('success-time').textContent = '🕐 ' + record.timestamp;
+    }
+
+    /** Reset form and show it again */
+    function resetForm() {
+      document.getElementById('attendance-form').reset();
+      document.getElementById('attendance-form').style.display = 'block';
+      document.getElementById('success-screen').style.display  = 'none';
+      hideAlert('form-alert');
+    }
+
+    // ============================================================
+    // ALERT HELPERS
+    // ============================================================
+    function showAlert(containerId, type, message) {
+      const el = document.getElementById(containerId);
+      el.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+      el.style.display = 'block';
+    }
+
+    function hideAlert(containerId) {
+      const el = document.getElementById(containerId);
+      el.style.display = 'none';
+      el.innerHTML = '';
+    }
+
+    // ============================================================
+    // QR CODE GENERATION
+    // ============================================================
+    let qrGenerated = false;
+
+    function generateQR() {
+      if (qrGenerated) return;   // Only generate once
+
+      const container = document.getElementById('qr-display');
+      container.innerHTML = '';  // Clear any old QR
+
+      // Use the current page URL — works for both local and hosted
+      const url = window.location.href.split('#')[0]; // Remove hash
+      document.getElementById('qr-url-text').textContent = url;
+
+      // Generate QR via QRCode.js
+      try {
+        new QRCode(container, {
+          text:          url,
+          width:         200,
+          height:        200,
+          colorDark:     '#1a4731',   // Green dark
+          colorLight:    '#ffffff',
+          correctLevel:  QRCode.CorrectLevel.H,
+        });
+        qrGenerated = true;
+      } catch (err) {
+        container.innerHTML = '<p style="color:var(--danger);font-size:13px;">QR generation failed. Make sure QRCode.js loaded.</p>';
+      }
+    }
+
+    /** Download the QR code canvas as a PNG file */
+    function downloadQR() {
+      const canvas = document.querySelector('#qr-display canvas');
+      if (!canvas) {
+        alert('QR Code not yet generated. Please open the QR tab first.');
+        return;
+      }
+
+      // Create a larger canvas with label
+      const offscreen = document.createElement('canvas');
+      const padding   = 24;
+      const labelH    = 56;
+      offscreen.width  = canvas.width  + padding * 2;
+      offscreen.height = canvas.height + padding * 2 + labelH;
+
+      const ctx = offscreen.getContext('2d');
+
+      // Background
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, offscreen.width, offscreen.height);
+
+      // QR image
+      ctx.drawImage(canvas, padding, padding);
+
+      // Label
+      ctx.fillStyle = '#1a4731';
+      ctx.font = 'bold 15px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(CONFIG.EVENT_NAME, offscreen.width / 2, canvas.height + padding + 24);
+      ctx.font = '12px sans-serif';
+      ctx.fillStyle = '#4a6355';
+      ctx.fillText('Scan to sign in your attendance', offscreen.width / 2, canvas.height + padding + 44);
+
+      // Trigger download
+      const link    = document.createElement('a');
+      link.download = 'brigada-eskwela-2026-qr.png';
+      link.href     = offscreen.toDataURL('image/png');
+      link.click();
+    }
+
+    // ============================================================
+    // ADMIN PANEL
+    // ============================================================
+    let adminUnlocked = false;
+
+    /** Check PIN and unlock admin panel */
+    function checkPin() {
+      const entered = document.getElementById('pin-input').value.trim();
+
+      if (entered === CONFIG.ADMIN_PIN) {
+        adminUnlocked = true;
+        document.getElementById('admin-gate').style.display  = 'none';
+        document.getElementById('admin-panel').style.display = 'block';
+        refreshAdmin();
+      } else {
+        showAlert('pin-alert', 'danger', '❌ Maling PIN. Subukan ulit.');
+        document.getElementById('pin-input').value = '';
+        document.getElementById('pin-input').focus();
+      }
+    }
+
+    /** Lock admin and go back to PIN gate */
+    function lockAdmin() {
+      adminUnlocked = false;
+      document.getElementById('admin-gate').style.display  = 'block';
+      document.getElementById('admin-panel').style.display = 'none';
+      document.getElementById('pin-input').value = '';
+      hideAlert('pin-alert');
+    }
+
+    /** Refresh stats and table */
+    function refreshAdmin() {
+      const records = getRecords();
+
+      // Stats
+      const students = records.filter(r => r.role === 'Student').length;
+      const faculty  = records.filter(r => r.role === 'Faculty / Staff').length;
+      document.getElementById('stat-total').textContent    = records.length;
+      document.getElementById('stat-students').textContent = students;
+      document.getElementById('stat-faculty').textContent  = faculty;
+
+      // Table
+      renderTable(records);
+    }
+
+    /** Render attendance records as HTML table */
+    function renderTable(records) {
+      const container = document.getElementById('admin-table-container');
+
+      if (records.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            📭 Wala pang naka-submit na attendance.
+          </div>`;
+        return;
+      }
+
+      // Build table (newest first)
+      const sorted = [...records].reverse();
+      let rows = '';
+      sorted.forEach((r, i) => {
+        const badgeClass = r.role === 'Student' ? 'badge-student' : 'badge-faculty';
+        rows += `
+          <tr>
+            <td>${sorted.length - i}</td>
+            <td><strong>${escHtml(r.fullName)}</strong></td>
+            <td>${escHtml(r.gradeLevel)}</td>
+            <td><span class="badge ${badgeClass}">${escHtml(r.role)}</span></td>
+            <td>${escHtml(r.organization)}</td>
+            <td style="white-space:nowrap;">${escHtml(r.time)}</td>
+          </tr>`;
+      });
+
+      container.innerHTML = `
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Full Name</th>
+                <th>Grade</th>
+                <th>Role</th>
+                <th>Org / Section</th>
+                <th>Time</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+    }
+
+    /** Simple HTML escape to prevent XSS in admin table */
+    function escHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    // ============================================================
+    // CSV EXPORT
+    // ============================================================
+    /**
+     * Generate and download a CSV file of all attendance records.
+     * Opening in Excel: File > Import (comma delimiter) or
+     * just double-click if Excel is your default CSV handler.
+     */
+    function exportCSV() {
+      const records = getRecords();
+
+      if (records.length === 0) {
+        alert('Walang data na mina-export. Mag-submit muna ng attendance.');
+        return;
+      }
+
+      // CSV header row
+      const header = [
+        'No.', 'Full Name', 'Grade Level', 'Role',
+        'Organization / Section', 'Date', 'Time', 'Full Timestamp'
+      ];
+
+      // Build rows
+      const lines = [header.join(',')];
+      records.forEach((r, i) => {
+        const row = [
+          i + 1,
+          csvField(r.fullName),
+          csvField(r.gradeLevel),
+          csvField(r.role),
+          csvField(r.organization),
+          csvField(r.date),
+          csvField(r.time),
+          csvField(r.timestamp),
+        ];
+        lines.push(row.join(','));
+      });
+
+      // Add summary footer
+      lines.push('');
+      lines.push(`"Total Records: ${records.length}"`);
+      lines.push(`"Exported: ${formatTimestamp(new Date())}"`);
+      lines.push(`"Event: ${CONFIG.EVENT_NAME}"`);
+      lines.push(`"${CONFIG.SCHOOL_DIV}"`);
+
+      // BOM for Excel to detect UTF-8 correctly (needed for Filipino characters)
+      const BOM = '\uFEFF';
+      const csv = BOM + lines.join('\r\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url  = URL.createObjectURL(blob);
+
+      // Trigger download
+      const dateStr  = new Date().toISOString().slice(0, 10);
+      const filename = `brigada-eskwela-2026-attendance-${dateStr}.csv`;
+      const link     = document.createElement('a');
+      link.href      = url;
+      link.download  = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+
+    /** Wrap a CSV field value in quotes and escape internal quotes */
+    function csvField(val) {
+      const s = String(val === null || val === undefined ? '' : val);
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+
+    // ============================================================
+    // PRINT TABLE
+    // ============================================================
+    function printTable() {
+      const records = getRecords();
+      if (records.length === 0) {
+        alert('Walang data na ipa-print.');
+        return;
+      }
+
+      let rows = '';
+      records.forEach((r, i) => {
+        rows += `<tr>
+          <td>${i + 1}</td>
+          <td>${escHtml(r.fullName)}</td>
+          <td>${escHtml(r.gradeLevel)}</td>
+          <td>${escHtml(r.role)}</td>
+          <td>${escHtml(r.organization)}</td>
+          <td>${escHtml(r.date)}</td>
+          <td>${escHtml(r.time)}</td>
+        </tr>`;
+      });
+
+      const printWindow = window.open('', '_blank');
+      printWindow.document.write(`
+        <!DOCTYPE html><html><head>
+          <title>Brigada Eskwela 2026 — Attendance</title>
+          <style>
+            body { font-family: Arial, sans-serif; font-size: 12px; padding: 16px; }
+            h1 { font-size: 16px; margin-bottom: 4px; }
+            h2 { font-size: 13px; color: #555; margin-bottom: 16px; font-weight: normal; }
+            table { width: 100%; border-collapse: collapse; }
+            th { background: #1a4731; color: white; padding: 7px 10px; text-align: left; }
+            td { padding: 6px 10px; border-bottom: 1px solid #e0e0e0; }
+            tr:nth-child(even) td { background: #f5f5f5; }
+            .footer { margin-top: 16px; font-size: 11px; color: #888; }
+          </style>
+        </head><body>
+          <h1>Brigada Eskwela 2026 Kick-Off — Attendance List</h1>
+          <h2>${CONFIG.SCHOOL_DIV} | Total: ${records.length} | Printed: ${formatTimestamp(new Date())}</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>#</th><th>Full Name</th><th>Grade</th>
+                <th>Role</th><th>Org / Section</th><th>Date</th><th>Time</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+          <div class="footer">End of list — ${records.length} records</div>
+          <script>window.print(); window.onafterprint = () => window.close();<\/script>
+        </body></html>`);
+      printWindow.document.close();
+    }
+
+    // ============================================================
+    // CLEAR ALL DATA
+    // ============================================================
+    function clearAllData() {
+      const records = getRecords();
+      if (records.length === 0) {
+        alert('Walang records na mabubura.');
+        return;
+      }
+      const confirmed = confirm(
+        `⚠️ Sigurado ka bang gusto mong burahin ang lahat ng ${records.length} records?\n\n` +
+        `HINDI ito mababalik. I-download muna ang CSV bago mag-clear.`
+      );
+      if (confirmed) {
+        localStorage.removeItem(CONFIG.STORAGE_KEY);
+        refreshAdmin();
+        alert('✅ Lahat ng records ay nabura na.');
+      }
+    }
+
+    // ============================================================
+    // INIT — Run on page load
+    // ============================================================
+    document.addEventListener('DOMContentLoaded', () => {
+      // Pre-generate QR if already on QR tab (rare edge case)
+      if (document.getElementById('panel-qr').classList.contains('active')) {
+        generateQR();
+      }
+    });
+  </script>
+</body>
+</html>
